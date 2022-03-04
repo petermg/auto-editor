@@ -68,7 +68,7 @@ def main_options(parser):
         help='Set the strength of the blur applied to a frame before being compared.')
 
     parser.add_text('Exporting as Media Options')
-    parser.add_argument('--video-codec', '-vcodec', '-c:v', default='auto',
+    parser.add_argument('--video-codec', '-vcodec', '-c:v', default='hevc_nvenc',
         help='Set the video codec for the output media file.')
     parser.add_argument('--audio-codec', '-acodec', '-c:a', default='auto',
         help='Set the audio codec for the output media file.')
@@ -172,7 +172,7 @@ def main_options(parser):
             'must be valid. For Windows users, this file will be in the C drive.\n'
             'The temp file can get quite big if you\'re generating a huge video, so '
             'make sure your location has enough space.')
-    parser.add_argument('--ffmpeg-location', default=None,
+    parser.add_argument('--ffmpeg-location', default='ffmpeg',
         help='Set a custom path to the ffmpeg location.',
         manual='This takes precedence over `--my-ffmpeg`.')
     parser.add_argument('--my-ffmpeg', action='store_true',
