@@ -148,7 +148,7 @@ def main_options(parser):
     parser.add_text('Utility Options')
     parser.add_argument('--no-open', action='store_true',
         help='Do not open the file after editing is done.')
-    parser.add_argument('--temp-dir', default=None,
+    parser.add_argument('--temp-dir', default='AETemp',
         help='Set where the temporary directory is located.',
         manual='If not set, tempdir will be set with Python\'s tempfile module\n'
             'The directory doesn\'t have to exist beforehand, however, the root path '
