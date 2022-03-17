@@ -84,7 +84,6 @@ def main_options(parser):
         help='Scale the output video by a certain factor.')
     parser.add_argument('--extras',
         help='Add extra options for ffmpeg for video rendering. Must be in quotes.')
-
     parser.add_text('Miscellaneous Options')
     parser.add_argument('--background', type=color_type, default='#000',
         help='Set the color of the background that is visible when the video is moved.')
