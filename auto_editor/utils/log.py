@@ -57,10 +57,6 @@ class Log:
         if not self.quiet:
             buffer = get_terminal_size().columns - len(message) - 3
             sys.stdout.write('  ' + message + ' ' * buffer + '\r')
-            try:
-                sys.stdout.flush()
-            except AttributeError:
-                pass
 
     def error(self, message: str) -> NoReturn:
         self.conwrite('')
@@ -79,12 +75,6 @@ class Log:
                 import os
 
                 os._exit(1)
-
-    def bug(self, message: str, bug_type: str = 'bug report') -> NoReturn:
-        self.error(
-            f'{message}\n\nSomething went wrong!\nCreate a {bug_type} at:\n  '
-            'https://github.com/WyattBlue/auto-editor/issues/\n'
-        )
 
     def import_error(self, lib: str) -> NoReturn:
         self.error(f"Python module '{lib}' not installed. Run:  pip install {lib}")
