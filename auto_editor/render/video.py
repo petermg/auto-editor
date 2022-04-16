@@ -216,7 +216,7 @@ def render_av(
     ]
 
     if apply_video_later:
-        cmd.extend(["-c:v", "mpeg4", "-qscale:v", "1"])
+        cmd.extend(['-c:v', 'hevc_nvenc', '-pix_fmt', 'p010le', '-rc', 'constqp', '-qp', '15'])
     else:
         cmd = video_quality(cmd, args, inp, rules)
 
