@@ -1,12 +1,35 @@
 import os
+from math import ceil
 from dataclasses import dataclass, asdict, fields
 
 from typing import Union, Callable
 
 import numpy as np
 
+from auto_editor.wavfile import read
 from auto_editor.utils.log import Log
+from auto_editor.ffwrapper import FileInfo
 from auto_editor.utils.progressbar import ProgressBar
+
+
+def get_media_duration(path: str, fps: float, temp: str, log: Log) -> int:
+
+    audio_path = os.path.join(temp, "0.wav")
+
+    if os.path.isfile(audio_path):
+        sample_rate, audio_samples = read(audio_path)
+        sample_rate_per_frame = sample_rate / fps
+        return ceil(audio_samples.shape[0] / sample_rate_per_frame)
+
+    import av
+
+    container = av.open(path)
+
+    if len(container.streams.video) < 1:
+        log.error("Could not get media duration")
+
+    video = av.open(path, "r").streams.video[0]
+    return int(float(video.duration * video.time_base) * fps)
 
 
 def get_audio_list(
@@ -19,9 +42,8 @@ def get_audio_list(
 ) -> np.ndarray:
 
     from auto_editor.analyze.audio import audio_detection
-    from auto_editor.scipy.wavfile import read
 
-    path = os.path.join(temp, f'{stream}.wav')
+    path = os.path.join(temp, f"{stream}.wav")
 
     if os.path.isfile(path):
         sample_rate, audio_samples = read(path)
@@ -44,32 +66,41 @@ def operand_combine(a: np.ndarray, b: np.ndarray, call: Callable) -> np.ndarray:
     return call(a, b)
 
 
-def get_stream_data(method: str, attrs, args, inp, fps, progress, temp, log):
+def get_stream_data(
+    method: str,
+    attrs,
+    args,
+    inp: FileInfo,
+    fps: float,
+    progress: ProgressBar,
+    temp: str,
+    log: Log,
+):
 
-    from auto_editor.analyze.generic import get_np_list
-
-    audio_samples, sample_rate = None, None
-
-    if method == 'none':
-        return get_np_list(inp.path, audio_samples, sample_rate, fps, np.ones)
-    if method == 'all':
-        return get_np_list(inp.path, audio_samples, sample_rate, fps, np.zeros)
-    if method == 'audio':
-        if attrs.stream == 'all':
+    if method == "none":
+        return np.ones((get_media_duration(inp.path, fps, temp, log)), dtype=np.bool_)
+    if method == "all":
+        return np.zeros((get_media_duration(inp.path, fps, temp, log)), dtype=np.bool_)
+    if method == "audio":
+        if attrs.stream == "all":
             total_list = None
             for i in range(len(inp.audio_streams)):
-                audio_list = get_audio_list(i, attrs.threshold, fps, progress, temp, log)
+                audio_list = get_audio_list(
+                    i, attrs.threshold, fps, progress, temp, log
+                )
                 if total_list is None:
                     total_list = audio_list
                 else:
                     total_list = operand_combine(total_list, audio_list, np.logical_or)
 
             if total_list is None:
-                log.error('Input has no audio streams.')
+                log.error("Input has no audio streams.")
             return total_list
         else:
-            return get_audio_list(attrs.stream, attrs.threshold, fps, progress, temp, log)
-    if method == 'motion':
+            return get_audio_list(
+                attrs.stream, attrs.threshold, fps, progress, temp, log
+            )
+    if method == "motion":
         from auto_editor.analyze.motion import motion_detection
 
         if len(inp.video_streams) == 0:
@@ -78,7 +109,7 @@ def get_stream_data(method: str, attrs, args, inp, fps, progress, temp, log):
         motion_list = motion_detection(inp.path, fps, progress, attrs.width, attrs.blur)
         return np.fromiter((x >= attrs.threshold for x in motion_list), dtype=np.bool_)
 
-    if method == 'pixeldiff':
+    if method == "pixeldiff":
         from auto_editor.analyze.pixeldiff import pixel_difference
 
         if len(inp.video_streams) == 0:
@@ -87,13 +118,11 @@ def get_stream_data(method: str, attrs, args, inp, fps, progress, temp, log):
         pixel_list = pixel_difference(inp.path, fps, progress)
         return np.fromiter((x >= attrs.threshold for x in pixel_list), dtype=np.bool_)
 
-def get_attributes(attrs_str, dataclass, log):
-    from auto_editor.vanparse import parse_dataclass, ParserError
 
-    try:
-        attrs = parse_dataclass(attrs_str, dataclass)
-    except ParserError as e:
-        log.error(str(e))
+def get_attributes(attrs_str, dataclass, log):
+    from auto_editor.vanparse import parse_dataclass
+
+    attrs = parse_dataclass(attrs_str, dataclass)
 
     dic_value = asdict(attrs)
     dic_type = {}
@@ -115,7 +144,7 @@ def get_has_loud(method_str, inp, fps, progress, temp, log, args):
     from auto_editor.utils.types import float_type
 
     def stream_type(val: str):
-        if val == 'all':
+        if val == "all":
             return val
         return int(val)
 
@@ -134,40 +163,40 @@ def get_has_loud(method_str, inp, fps, progress, temp, log, args):
     class Pixeldiff:
         threshold: int = 1
 
-    KEYWORD_SEP = ' '
-    METHOD_ATTRS_SEP = ':'
+    KEYWORD_SEP = " "
+    METHOD_ATTRS_SEP = ":"
 
     result_array = None
     operand = None
 
     logic_funcs = {
-        'and': np.logical_and,
-        'or': np.logical_or,
-        'xor': np.logical_xor,
+        "and": np.logical_and,
+        "or": np.logical_or,
+        "xor": np.logical_xor,
     }
 
-    method_str = method_str.replace('_', ' ')  # Allow old style `--edit` to work
+    method_str = method_str.replace("_", " ")  # Allow old style `--edit` to work
 
     for method in method_str.split(KEYWORD_SEP):
 
-        if method == '':  # Skip whitespace
+        if method == "":  # Skip whitespace
             continue
 
         if METHOD_ATTRS_SEP in method:
             method, attrs_str = method.split(METHOD_ATTRS_SEP)
         else:
-            attrs_str = ''
+            attrs_str = ""
 
-        if method == 'audio':
+        if method == "audio":
             attrs = get_attributes(attrs_str, Audio, log)
-        elif method == 'motion':
+        elif method == "motion":
             attrs = get_attributes(attrs_str, Motion, log)
-        elif method == 'pixeldiff':
+        elif method == "pixeldiff":
             attrs = get_attributes(attrs_str, Pixeldiff, log)
         else:
             attrs = None
 
-        if method in ('audio', 'motion', 'pixeldiff', 'none', 'all'):
+        if method in ("audio", "motion", "pixeldiff", "none", "all"):
 
             if result_array is not None and operand is None:
                 log.error("Logic operator must be between two editing methods.")
@@ -176,24 +205,26 @@ def get_has_loud(method_str, inp, fps, progress, temp, log, args):
                 method, attrs, args, inp, fps, progress, temp, log
             )
 
-            if operand == 'not':
+            if operand == "not":
                 result_array = np.logical_not(stream_data)
                 operand = None
             elif result_array is None:
                 result_array = stream_data
-            elif operand in ('and', 'or', 'xor'):
-                result_array = operand_combine(result_array, stream_data, logic_funcs[operand])
+            elif operand in ("and", "or", "xor"):
+                result_array = operand_combine(
+                    result_array, stream_data, logic_funcs[operand]
+                )
                 operand = None
 
-        elif method in ('and', 'or', 'xor'):
+        elif method in ("and", "or", "xor"):
             if operand is not None:
-                log.error('Invalid Editing Syntax.')
+                log.error("Invalid Editing Syntax.")
             if result_array is None:
                 log.error(f"'{method}' operand needs two arguments.")
             operand = method
-        elif method == 'not':
+        elif method == "not":
             if operand is not None:
-                log.error('Invalid Editing Syntax.')
+                log.error("Invalid Editing Syntax.")
             operand = method
         else:
             log.error(f"Unknown method/operator: '{method}'")
@@ -205,8 +236,15 @@ def get_has_loud(method_str, inp, fps, progress, temp, log, args):
 
 
 def get_chunks(inp, fps, args, progress, temp, log):
-    from auto_editor.cutting import (to_speed_list, set_range, chunkify, apply_mark_as,
-        apply_margin, seconds_to_frames, cook)
+    from auto_editor.cutting import (
+        to_speed_list,
+        set_range,
+        chunkify,
+        apply_mark_as,
+        apply_margin,
+        seconds_to_frames,
+        cook,
+    )
 
     start_margin, end_margin = args.frame_margin
 
