@@ -46,7 +46,7 @@ def main_options(parser):
         help='Add extra options for yt-dlp. Must be in quotes'
     )
     parser.add_text('Exporting as Media Options')
-    parser.add_argument('--video-codec', '-vcodec', '-c:v', default='auto',
+    parser.add_argument('--video-codec', '-vcodec', '-c:v', default='hevc_nvenc',
         help='Set the video codec for the output media file.')
     parser.add_argument('--audio-codec', '-acodec', '-c:a', default='auto',
         help='Set the audio codec for the output media file.')
@@ -103,10 +103,10 @@ def main_options(parser):
     parser.add_text('Utility Options')
     parser.add_argument('--no-open', flag=True,
         help='Do not open the file after editing is done.')
-    parser.add_argument('--temp-dir',
+    parser.add_argument('--temp-dir', default='AETemp',
         help='Set where the temporary directory is located.',
     )
-    parser.add_argument('--ffmpeg-location',
+    parser.add_argument('--ffmpeg-location', default='ffmpeg',
         help='Set a custom path to the ffmpeg location.',
     )
     parser.add_argument('--my-ffmpeg', flag=True,
@@ -115,7 +115,7 @@ def main_options(parser):
     parser.add_text('Display Options')
     parser.add_argument('--version', flag=True,
         help="Display the program's version and halt.")
-    parser.add_argument('--debug', flag=True,
+    parser.add_argument('--debug', default='true',
         help='Show debugging messages and values.')
     parser.add_argument('--show-ffmpeg-debug', flag=True,
         help='Show ffmpeg progress and output.')
