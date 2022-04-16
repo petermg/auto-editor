@@ -117,7 +117,7 @@ def main_options(parser):
         help="Display the program's version and halt.")
     parser.add_argument('--debug', default='true',
         help='Show debugging messages and values.')
-    parser.add_argument('--show-ffmpeg-debug', flag=True,
+    parser.add_argument('--show-ffmpeg-debug', default='true',
         help='Show ffmpeg progress and output.')
     parser.add_argument('--quiet', '-q', flag=True,
         help='Display less output.')
