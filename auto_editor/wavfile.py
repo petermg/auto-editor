@@ -113,9 +113,9 @@ def _read_data_chunk(
 
     if channels > 1:
         try:
-            data = data.reshape(-1, channels)
+            data = data.reshape(-1, channels)  # type: ignore
         except ValueError:
-            data = data[:-1].reshape(-1, channels)
+            data = data[:-1].reshape(-1, channels)  # type: ignore
 
     return data
 
@@ -156,13 +156,13 @@ def _read_rf64_chunk(fid: io.BufferedReader) -> Tuple[int, int, bool]:
     # Combine bw_size and data_size to 64-bit ints
 
     def combine(a, b) -> int:
-        return struct.unpack("<Q", a+b)[0]
+        return struct.unpack("<Q", a + b)[0]
 
     file_size = combine(bw_size_low, bw_size_high)
     data_size = combine(data_size_low, data_size_high)
 
     chunk_size = struct.unpack(fmt, chunk_size)[0]
-    fid.read(40 - chunk_size)
+    fid.read(40 - chunk_size)  # type: ignore
 
     return data_size, file_size, is_big_endian
 

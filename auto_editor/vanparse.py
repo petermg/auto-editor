@@ -87,13 +87,13 @@ def get_help_data() -> Dict[str, Dict[str, str]]:
     import json
     import os.path
 
-
     dirpath = os.path.dirname(os.path.realpath(__file__))
 
     with open(os.path.join(dirpath, "help.json"), "r") as fileobj:
         data = json.load(fileobj)
 
     return data
+
 
 def print_option_help(program_name: str, option: Options) -> None:
     from dataclasses import fields, _MISSING_TYPE
@@ -178,7 +178,7 @@ class ArgumentParser:
             sys.exit()
 
         if sys_args == ["-v"] or sys_args == ["-V"]:
-            out(f"{self.program_name} version {auto_editor.version}")
+            out(f"{self.program_name} Version {auto_editor.version}")
             sys.exit()
 
         return ParseOptions(

@@ -44,14 +44,6 @@ def main(sys_args=sys.argv[1:]):
 
     ffmpeg = FFmpeg(args.ffmpeg_location, args.my_ffmpeg, False)
 
-    def aspect_str(w: Optional[str], h: Optional[str]) -> str:
-        if w is None or h is None:
-            return ""
-        w_, h_ = aspect_ratio(int(w), int(h))
-        if w_ is None:
-            return ""
-        return f" ({w_}:{h_})"
-
     file_info = {}
 
     for file in args.input:
@@ -61,7 +53,7 @@ def main(sys_args=sys.argv[1:]):
         else:
             Log().error(f"Could not find file: {file}")
 
-        inp = FileInfo(file, ffmpeg)
+        inp = FileInfo(file, ffmpeg, Log())
 
         file_info[file] = {
             "video": [],
@@ -70,10 +62,10 @@ def main(sys_args=sys.argv[1:]):
             "container": {},
         }
 
-        if len(inp.video_streams) > 0:
-            text += f" - video tracks: {len(inp.video_streams)}\n"
+        if len(inp.videos) > 0:
+            text += f" - video tracks: {len(inp.videos)}\n"
 
-        for track, stream in enumerate(inp.video_streams):
+        for track, stream in enumerate(inp.videos):
             text += f"   - Track #{track}\n"
             text += f"     - codec: {stream.codec}\n"
 
@@ -96,15 +88,13 @@ def main(sys_args=sys.argv[1:]):
                 text += f"     - fps: {stream.fps}\n"
                 vid["fps"] = float(stream.fps)
 
-            w = stream.width
-            h = stream.height
+            w, h = stream.width, stream.height
+            w_, h_ = aspect_ratio(w, h)
+            text += f"     - resolution: {w}x{h} ({w_}:{h_})\n"
 
-            if w is not None and h is not None:
-                text += f"     - resolution: {w}x{h}{aspect_str(w, h)}\n"
-
-                vid["width"] = int(w)
-                vid["height"] = int(h)
-                vid["aspect_ratio"] = aspect_ratio(int(w), int(h))
+            vid["width"] = stream.width
+            vid["height"] = stream.height
+            vid["aspect_ratio"] = aspect_ratio(w, h)
 
             if stream.bitrate is not None:
                 text += f"     - bitrate: {stream.bitrate}\n"
@@ -115,10 +105,10 @@ def main(sys_args=sys.argv[1:]):
 
             file_info[file]["video"].append(vid)
 
-        if len(inp.audio_streams) > 0:
-            text += f" - audio tracks: {len(inp.audio_streams)}\n"
+        if len(inp.audios) > 0:
+            text += f" - audio tracks: {len(inp.audios)}\n"
 
-        for track, stream in enumerate(inp.audio_streams):
+        for track, stream in enumerate(inp.audios):
             aud = {}
 
             text += f"   - Track #{track}\n"
@@ -126,7 +116,7 @@ def main(sys_args=sys.argv[1:]):
             text += f"     - samplerate: {stream.samplerate}\n"
 
             aud["codec"] = stream.codec
-            aud["samplerate"] = int(stream.samplerate)
+            aud["samplerate"] = stream.samplerate
 
             if stream.bitrate is not None:
                 text += f"     - bitrate: {stream.bitrate}\n"
@@ -138,10 +128,10 @@ def main(sys_args=sys.argv[1:]):
 
             file_info[file]["audio"].append(aud)
 
-        if len(inp.subtitle_streams) > 0:
-            text += f" - subtitle tracks: {len(inp.subtitle_streams)}\n"
+        if len(inp.subtitles) > 0:
+            text += f" - subtitle tracks: {len(inp.subtitles)}\n"
 
-        for track, stream in enumerate(inp.subtitle_streams):
+        for track, stream in enumerate(inp.subtitles):
             sub = {}
 
             text += f"   - Track #{track}\n"
@@ -153,10 +143,7 @@ def main(sys_args=sys.argv[1:]):
 
             file_info[file]["subtitle"].append(sub)
 
-        if (
-            len(inp.video_streams) + len(inp.audio_streams) + len(inp.subtitle_streams)
-            == 0
-        ):
+        if len(inp.videos) + len(inp.audios) + len(inp.subtitles) == 0:
             text += "Invalid media.\n"
             file_info[file] = {"media": "invalid"}
         else:
@@ -176,8 +163,17 @@ def main(sys_args=sys.argv[1:]):
                     print(text, end="")
                 text = ""
                 fps_mode = ffmpeg.pipe(
-                    ["-i", file, "-hide_banner", "-vf", "vfrdet", "-an", "-f", "null",
-                        "-"]
+                    [
+                        "-i",
+                        file,
+                        "-hide_banner",
+                        "-vf",
+                        "vfrdet",
+                        "-an",
+                        "-f",
+                        "null",
+                        "-",
+                    ]
                 )
                 fps_mode = fps_mode.strip()
 

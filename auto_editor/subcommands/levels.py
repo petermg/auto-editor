@@ -53,18 +53,16 @@ def main(sys_args=sys.argv[1:]):
     ffmpeg = FFmpeg(args.ffmpeg_location, args.my_ffmpeg, False)
 
     progress = ProgressBar("none")
-
-    inp = FileInfo(args.input[0], ffmpeg)
-    fps = 30 if inp.fps is None else float(inp.fps)
-
     temp = tempfile.mkdtemp()
     log = Log(temp=temp)
+
+    inp = FileInfo(args.input[0], ffmpeg, log)
 
     if args.kind == "audio":
         from auto_editor.analyze.audio import audio_detection
         from auto_editor.wavfile import read
 
-        if args.track >= len(inp.audio_streams):
+        if args.track >= len(inp.audios):
             log.error(f"Audio track '{args.track}' does not exist.")
 
         read_track = os.path.join(temp, f"{args.track}.wav")
@@ -78,23 +76,25 @@ def main(sys_args=sys.argv[1:]):
 
         sample_rate, audio_samples = read(read_track)
 
-        print_float_list(audio_detection(audio_samples, sample_rate, fps, progress))
+        print_float_list(
+            audio_detection(audio_samples, sample_rate, inp.gfps, progress)
+        )
 
     if args.kind == "motion":
-        if args.track >= len(inp.video_streams):
+        if args.track >= len(inp.videos):
             log.error(f"Video track '{args.track}' does not exist.")
 
         from auto_editor.analyze.motion import motion_detection
 
-        print_float_list(motion_detection(inp.path, fps, progress, width=400, blur=9))
+        print_float_list(motion_detection(inp, progress, width=400, blur=9))
 
     if args.kind == "pixeldiff":
-        if args.track >= len(inp.video_streams):
+        if args.track >= len(inp.videos):
             log.error(f"Video track '{args.track}' does not exist.")
 
         from auto_editor.analyze.pixeldiff import pixel_difference
 
-        print_int_list(pixel_difference(inp.path, fps, progress))
+        print_int_list(pixel_difference(inp, progress))
 
     log.cleanup()
 

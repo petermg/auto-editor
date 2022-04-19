@@ -1,34 +1,38 @@
-from .utils import get_width_height
+from typing import List, Tuple, Union
+
+from auto_editor.ffwrapper import FileInfo
 from auto_editor.utils.func import aspect_ratio
 
 
-def frames_to_timecode(frames: int, fps: float) -> str:
+def frames_to_timecode(frames: Union[int, float], fps: float) -> str:
     seconds = frames / fps
 
-    m, s = divmod(seconds, 60)
+    m, _s = divmod(seconds, 60)
     h, m = divmod(m, 60)
 
-    if len(str(int(s))) == 1:
-        s = "0" + str(f"{round(s, 3):.3f}")
+    if len(str(int(_s))) == 1:
+        s = f"0{round(_s, 3):.3f}"
     else:
-        s = str(f"{round(s, 3):.3f}")
+        s = f"{round(_s, 3):.3f}"
 
     return f"{int(h):02d}:{int(m):02d}:{s}"
 
 
 def timecode_to_frames(timecode: str, fps: float) -> int:
-    h, m, s = timecode.split(":")
-    h = int(h)
-    m = int(m)
-    s = float(s)
+    _h, _m, _s = timecode.split(":")
+    h = int(_h)
+    m = int(_m)
+    s = float(_s)
     return round((h * 3600 + m * 60 + s) * fps)
 
 
-def shotcut_xml(inp, output, chunks, fps, log):
-    width, height = get_width_height(inp)
-    if width is None or height is None:
-        width, height = "1280", "720"
-    num, den = aspect_ratio(int(width), int(height))
+def shotcut_xml(
+    inp: FileInfo,
+    output: str,
+    chunks: List[Tuple[int, int, float]],
+) -> None:
+    width, height = inp.gwidth, inp.gheight
+    num, den = aspect_ratio(width, height)
 
     global_out = inp.duration
 
@@ -46,7 +50,7 @@ def shotcut_xml(inp, output, chunks, fps, log):
             + f'width="{width}" height="{height}" '
             + 'progressive="1" sample_aspect_num="1" sample_aspect_den="1" '
             + f'display_aspect_num="{num}" display_aspect_den="{den}" '
-            + f'frame_rate_num="{fps}" frame_rate_den="1" colorspace="709"/>\n'
+            + f'frame_rate_num="{inp.gfps}" frame_rate_den="1" colorspace="709"/>\n'
         )
         out.write('\t<playlist id="main_bin">\n')
         out.write('\t\t<property name="xml_retain">1</property>\n')
@@ -64,7 +68,9 @@ def shotcut_xml(inp, output, chunks, fps, log):
         out.write("\t</producer>\n")
 
         out.write('\t<playlist id="background">\n')  # same for this out too.
-        out.write(f'\t\t<entry producer="black" in="00:00:00.000" out="{global_out}"/>\n')
+        out.write(
+            f'\t\t<entry producer="black" in="00:00:00.000" out="{global_out}"/>\n'
+        )
         out.write("\t</playlist>\n")
 
         chains = 0
@@ -78,8 +84,8 @@ def shotcut_xml(inp, output, chunks, fps, log):
 
             speed = clip[2]
 
-            _out = frames_to_timecode(clip[1] / speed, fps)
-            length = frames_to_timecode((clip[1] / speed) + 1, fps)
+            _out = frames_to_timecode(clip[1] / speed, inp.gfps)
+            length = frames_to_timecode((clip[1] / speed) + 1, inp.gfps)
 
             if speed == 1:
                 resource = inp.path
@@ -145,14 +151,14 @@ def shotcut_xml(inp, output, chunks, fps, log):
             speed = clip[2]
 
             if speed == 1:
-                in_len = clip[0] - 1
+                in_len: float = clip[0] - 1
             else:
                 in_len = max(clip[0] / speed, 0)
 
             out_len = max((clip[1] - 2) / speed, 0)
 
-            _in = frames_to_timecode(in_len, fps)
-            _out = frames_to_timecode(out_len, fps)
+            _in = frames_to_timecode(in_len, inp.gfps)
+            _out = frames_to_timecode(out_len, inp.gfps)
 
             tag_name = f"chain{i}"
             if speed != 1:

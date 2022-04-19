@@ -319,6 +319,10 @@ def main(sys_args: Optional[List[str]] = None):
             ("alanguage", "eng"),
         )
 
+    # PR #260
+    def high_speed_test():
+        run_program(["example.mp4", "--video-speed", "99998"])
+
     # Issue #200
     def url_test():
         run_program(["https://github.com/WyattBlue/auto-editor/raw/master/example.mp4"])
@@ -512,6 +516,12 @@ def main(sys_args: Optional[List[str]] = None):
         run_program(["example.mp4", "hmm.mp4", "--combine_files", "--debug"])
         os.remove("hmm.mp4")
 
+    def thumbnail_test():
+        run_program(["resources/embedded_thumbnail.mp4"])
+        # Add code to see if thumbnail is in output later.
+        # container = av.open("resources/embeded_thumbnail_ALTERED.mp4", "r")
+        # video = container.streams.video[1]
+
     def motion_tests():
         run_program(
             [
@@ -604,6 +614,7 @@ def main(sys_args: Optional[List[str]] = None):
         tester.run_test(version_test)
         tester.run_test(parser_test)
         tester.run_test(example_tests)
+        tester.run_test(high_speed_test)
         tester.run_test(url_test)
         tester.run_test(unit_tests)
         tester.run_test(backwards_range_test)
@@ -624,6 +635,7 @@ def main(sys_args: Optional[List[str]] = None):
         tester.run_test(export_tests)
         tester.run_test(codec_tests)
         tester.run_test(combine_tests)
+        tester.run_test(thumbnail_test)
         tester.run_test(motion_tests)
         tester.run_test(edit_positive_tests)
         tester.run_test(edit_negative_tests)

@@ -6,9 +6,8 @@ from platform import system
 
 from typing import List, Tuple
 
-from .utils import indent, get_width_height, safe_mkdir
+from .utils import indent, safe_mkdir
 
-from auto_editor.utils.log import Log
 from auto_editor.ffwrapper import FileInfo
 
 """
@@ -27,10 +26,10 @@ ANAMORPHIC = "FALSE"
 DEPTH = "16"
 
 
-def get_samplerate(inp: FileInfo, default: str = "48000") -> str:
-    if len(inp.audio_streams) > 0 and inp.audio_streams[0].samplerate is not None:
-        return inp.audio_streams[0].samplerate
-    return default
+def get_samplerate(inp: FileInfo) -> str:
+    if len(inp.audios) > 0 and inp.audios[0].samplerate is not None:
+        return inp.audios[0].samplerate
+    return "48000"
 
 
 def fix_url(path: str) -> str:
@@ -83,13 +82,12 @@ def premiere_xml(
     temp: str,
     output: str,
     chunks: List[Tuple[int, int, float]],
-    fps: float,
-    log: Log,
 ) -> None:
 
-    audio_file = len(inp.video_streams) == 0 and len(inp.audio_streams) == 1
+    audio_file = len(inp.videos) == 0 and len(inp.audios) == 1
 
     # This is not at all how timebase works in actual media but that's how it works here.
+    fps = inp.gfps
     timebase = int(fps)
 
     if fps == 23.98 or fps == 23.97602397 or fps == 23.976:
@@ -113,7 +111,7 @@ def premiere_xml(
 
     pathurls = [fix_url(inp.path)]
 
-    tracks = len(inp.audio_streams)
+    tracks = len(inp.audios)
 
     if tracks > 1:
         name_without_extension = inp.basename[: inp.basename.rfind(".")]
@@ -125,11 +123,7 @@ def premiere_xml(
             move(os.path.join(temp, f"{i}.wav"), newtrack)
             pathurls.append(fix_url(newtrack))
 
-    width, height = get_width_height(inp)
-    if width is None or height is None:
-        width, height = "1280", "720"
-
-    sample_rate = get_samplerate(inp)
+    width, height = inp.gwidth, inp.gheight
 
     group_name = f"Auto-Editor {'Audio' if audio_file else 'Video'} Group"
 
@@ -153,7 +147,7 @@ def premiere_xml(
             )
         )
 
-        if len(inp.video_streams) > 0:
+        if len(inp.videos) > 0:
             outfile.write(
                 indent(
                     3,
@@ -173,7 +167,7 @@ def premiere_xml(
             )
         )
 
-        if len(inp.video_streams) > 0:
+        if len(inp.videos) > 0:
             outfile.write(
                 indent(
                     3,
@@ -187,14 +181,14 @@ def premiere_xml(
                 3,
                 "\t\t</samplecharacteristics>",
                 "\t</format>",
-                "</video>" if len(inp.video_streams) == 0 else "\t<track>",
+                "</video>" if len(inp.videos) == 0 else "\t<track>",
             )
         )
 
-        if len(inp.video_streams) > 0:
+        if len(inp.videos) > 0:
             # Handle video clips
 
-            total = 0
+            total = 0.0
             for j, clip in enumerate(clips):
 
                 clip_duration = (clip[1] - clip[0] + 1) / clip[2]
@@ -248,7 +242,7 @@ def premiere_xml(
                             "\t\t<audio>",
                             "\t\t\t<samplecharacteristics>",
                             f"\t\t\t\t<depth>{DEPTH}</depth>",
-                            f"\t\t\t\t<samplerate>{sample_rate}</samplerate>",
+                            f"\t\t\t\t<samplerate>{inp.gsamplerate}</samplerate>",
                             "\t\t\t</samplecharacteristics>",
                             "\t\t\t<channelcount>2</channelcount>",
                             "\t\t</audio>",
@@ -293,7 +287,7 @@ def premiere_xml(
                 "\t<format>",
                 "\t\t<samplecharacteristics>",
                 f"\t\t\t<depth>{DEPTH}</depth>",
-                f"\t\t\t<samplerate>{sample_rate}</samplerate>",
+                f"\t\t\t<samplerate>{inp.gsamplerate}</samplerate>",
                 "\t\t</samplecharacteristics>",
                 "\t</format>",
             )
@@ -350,7 +344,7 @@ def premiere_xml(
                             "\t\t<audio>",
                             "\t\t\t<samplecharacteristics>",
                             f"\t\t\t\t<depth>{DEPTH}</depth>",
-                            f"\t\t\t\t<samplerate>{sample_rate}</samplerate>",
+                            f"\t\t\t\t<samplerate>{inp.gsamplerate}</samplerate>",
                             "\t\t\t</samplecharacteristics>",
                             "\t\t\t<channelcount>2</channelcount>",
                             "\t\t</audio>",
@@ -386,5 +380,3 @@ def premiere_xml(
         outfile.write("\t\t</media>\n")
         outfile.write("\t</sequence>\n")
         outfile.write("</xmeml>\n")
-
-    log.conwrite("")
