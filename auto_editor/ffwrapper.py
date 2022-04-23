@@ -230,6 +230,7 @@ class FileInfo:
         for line in info.split("\n"):
             if re.search(r"Stream #", line):
                 if re.search(r"Video:", line):
+<<<<<<< HEAD
                     v_data = VideoStream(
                         width=regex_match(r"(?P<match>\d+)x\d+[\s,]", line),
                         height=regex_match(r"\d+x(?P<match>\d+)[\s,]", line),
@@ -237,6 +238,42 @@ class FileInfo:
                         bitrate=regex_match(r"\s(?P<match>\d+\skb\/s)", line),
                         fps=regex_match(r"\s(?P<match>[\d\.]+)\stbr", line),
                         lang=regex_match(lang_regex, line),
+=======
+                    codec = regex_match(r"Video:\s(?P<match>\w+)", line)
+                    if codec is None:
+                        log.error("Auto-Editor got 'None' when probing video codec")
+
+                    w = regex_match(r"(?P<match>[0-9]+)x[0-9]+[\s,]", line)
+                    h = regex_match(r"[0-9]+x(?P<match>[0-9]+)[\s,]", line)
+                    _fps = regex_match(r"\s(?P<match>[0-9\.]+)\stbr", line)
+
+                    if w is None or h is None:
+                        log.error("Auto-Editor got 'None' when probing resolution")
+                    if _fps is None:
+                        if codec not in ("png", "mjpeg", "webp"):
+                            log.error("Auto-Editor got 'None' when probing fps")
+                        _fps = "25"
+
+                    try:
+                        fps = float(_fps)
+                    except ValueError:
+                        log.error(f"Couldn't convert '{fps}' to float")
+
+                    if fps < 1:
+                        log.error(
+                            f"{self.basename}: Frame rate cannot be below 1. fps: {fps}"
+                        )
+
+                    self.videos.append(
+                        VideoStream(
+                            int(w),
+                            int(h),
+                            codec,
+                            fps,
+                            bitrate=regex_match(r"\s(?P<match>[0-9]+\skb\/s)", line),
+                            lang=regex_match(lang_regex, line),
+                        )
+>>>>>>> master
                     )
                     if fps is None:
                         fps = v_data.fps
