@@ -27,12 +27,6 @@ encoders = {
     "h264": {
         "pix_fmt": {"videotoolbox_vld", "nv12", "yuv420p"},
     },
-    "h264_nvenc": {
-        "pix_fmt": {"yuv420p", "nv12", "p010le", "yuv444p", "p016le", "yuv444p16le", "bgr0", "rgb0", "gbrp", "gbrp16le", "cuda", "d3d11"},
-    },
-    "h264_amf": {
-        "pix_fmt": {"nv12", "yuv420p", "d3d11", "dxva2_vld"},
-    },
     "libx265": {
         "pix_fmt": {
             "yuv420p",
@@ -103,6 +97,12 @@ encoders = {
             "d3d11",
             "dxva2_vld",
         },
+    },
+   "h264_nvenc": {
+        "pix_fmt": {"yuv420p", "nv12", "p010le", "yuv444p", "p016le", "yuv444p16le", "bgr0", "rgb0", "gbrp", "gbrp16le", "cuda", "d3d11",},
+    },
+    "h264_amf": {
+        "pix_fmt": {"nv12", "yuv420p", "d3d11", "dxva2_vld",},
     },
     "vp9": {
         "pix_fmt": {

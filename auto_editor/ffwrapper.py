@@ -4,8 +4,8 @@ import sys
 import os.path
 import subprocess
 from platform import system
-from subprocess import Popen, PIPE
 from dataclasses import dataclass
+from subprocess import Popen, PIPE
 
 # Typing
 from typing import List, Optional
@@ -143,27 +143,27 @@ class FFmpeg:
 
 @dataclass
 class VideoStream:
-    width: Optional[str]
-    height: Optional[str]
-    codec: Optional[str]
+    width: int
+    height: int
+    codec: str
+    fps: float
     bitrate: Optional[str]
-    fps: Optional[str]
     lang: Optional[str]
 
 
 @dataclass
 class AudioStream:
-    codec: Optional[str]
-    samplerate: Optional[str]
+    codec: str
+    samplerate: int
     bitrate: Optional[str]
     lang: Optional[str]
 
 
 @dataclass
 class SubtitleStream:
-    codec: Optional[str]
+    codec: str
+    ext: str
     lang: Optional[str]
-    ext: Optional[str] = None
 
 
 class FileInfo:
@@ -177,13 +177,16 @@ class FileInfo:
         "duration",
         "bitrate",
         "metadata",
-        "fps",
-        "video_streams",
-        "audio_streams",
-        "subtitle_streams",
+        "videos",
+        "audios",
+        "subtitles",
+        "gfps",
+        "gwidth",
+        "gheight",
+        "gsamplerate",
     )
 
-    def __init__(self, path: str, ffmpeg: FFmpeg):
+    def __init__(self, path: str, ffmpeg: FFmpeg, log: Log):
         self.path = path
         self.abspath = os.path.abspath(path)
         self.basename = os.path.basename(path)
@@ -192,8 +195,8 @@ class FileInfo:
 
         info = get_stdout([ffmpeg.path, "-hide_banner", "-i", path])
 
-        self.duration = regex_match(r"Duration:\s(?P<match>[\d:.]+),", info)
-        self.bitrate = regex_match(r"bitrate:\s(?P<match>\d+\skb\/s)", info)
+        self.duration = regex_match(r"Duration:\s(?P<match>[0-9:.]+),", info)
+        self.bitrate = regex_match(r"bitrate:\s(?P<match>[0-9]+\skb\/s)", info)
 
         self.metadata = {}
         active = False
@@ -218,27 +221,17 @@ class FileInfo:
             if re.search(r"^\s\sMetadata:", line):
                 active = True
 
-        video_streams = []
-        audio_streams = []
-        subtitle_streams = []
         fps = None
-
-        lang_regex = r"Stream #\d+:\d(?:[\[\]a-z0-9]|)+\((?P<match>\w+)\)"
-
+        lang_regex = r"Stream #[0-9]+:[0-9](?:[\[\]a-z0-9]|)+\((?P<match>\w+)\)"
         sub_exts = {"mov_text": "srt", "ass": "ass", "webvtt": "vtt"}
+
+        self.videos = []
+        self.audios = []
+        self.subtitles = []
 
         for line in info.split("\n"):
             if re.search(r"Stream #", line):
                 if re.search(r"Video:", line):
-<<<<<<< HEAD
-                    v_data = VideoStream(
-                        width=regex_match(r"(?P<match>\d+)x\d+[\s,]", line),
-                        height=regex_match(r"\d+x(?P<match>\d+)[\s,]", line),
-                        codec=regex_match(r"Video:\s(?P<match>\w+)", line),
-                        bitrate=regex_match(r"\s(?P<match>\d+\skb\/s)", line),
-                        fps=regex_match(r"\s(?P<match>[\d\.]+)\stbr", line),
-                        lang=regex_match(lang_regex, line),
-=======
                     codec = regex_match(r"Video:\s(?P<match>\w+)", line)
                     if codec is None:
                         log.error("Auto-Editor got 'None' when probing video codec")
@@ -273,32 +266,43 @@ class FileInfo:
                             bitrate=regex_match(r"\s(?P<match>[0-9]+\skb\/s)", line),
                             lang=regex_match(lang_regex, line),
                         )
->>>>>>> master
                     )
-                    if fps is None:
-                        fps = v_data.fps
-                    video_streams.append(v_data)
-
                 elif re.search(r"Audio:", line):
-                    audio_streams.append(
+                    _sr = regex_match(r"(?P<match>[0-9]+)\sHz", line)
+                    if _sr is None:
+                        log.error("Auto-Editor got 'None' when probing samplerate")
+
+                    codec = regex_match(r"Audio:\s(?P<match>\w+)", line)
+                    if codec is None:
+                        log.error("Auto-Editor got 'None' when probing audio codec")
+
+                    self.audios.append(
                         AudioStream(
-                            codec=regex_match(r"Audio:\s(?P<match>\w+)", line),
-                            samplerate=regex_match(r"(?P<match>\d+)\sHz", line),
-                            bitrate=regex_match(r"\s(?P<match>\d+\skb\/s)", line),
+                            codec,
+                            int(_sr),
+                            bitrate=regex_match(r"\s(?P<match>[0-9]+\skb\/s)", line),
                             lang=regex_match(lang_regex, line),
                         )
                     )
-
                 elif re.search(r"Subtitle:", line):
-                    s_data = SubtitleStream(
-                        codec=regex_match(r"Subtitle:\s(?P<match>\w+)", line),
-                        lang=regex_match(lang_regex, line),
-                    )
-                    if s_data.codec is not None:
-                        s_data.ext = sub_exts.get(s_data.codec, "vtt")
-                    subtitle_streams.append(s_data)
+                    codec = regex_match(r"Subtitle:\s(?P<match>\w+)", line)
+                    if codec is None:
+                        log.error("Auto-Editor got 'None' when probing subtitle codec")
 
-        self.fps = fps
-        self.video_streams = video_streams
-        self.audio_streams = audio_streams
-        self.subtitle_streams = subtitle_streams
+                    ext = sub_exts.get(codec, "vtt")
+
+                    self.subtitles.append(
+                        SubtitleStream(codec, ext, regex_match(lang_regex, line))
+                    )
+
+        self.gfps: float = 30.0 if fps is None else fps
+
+        if len(self.videos) > 0:
+            self.gwidth, self.gheight = self.videos[0].width, self.videos[0].height
+        else:
+            self.gwidth, self.gheight = 1280, 720
+
+        if len(self.audios) > 0:
+            self.gsamplerate = self.audios[0].samplerate
+        else:
+            self.gsamplerate = 48000

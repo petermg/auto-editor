@@ -30,12 +30,12 @@ pcm_formats = [
 h265 = {
     "name": "H.265 / High Efficiency Video Coding (HEVC) / MPEG-H Part 2",
     "allow_video": True,
-    "vcodecs": ["hevc", "hevc_amf", "hevc_nvenc", "mpeg4", "h264"],
+    "vcodecs": ["hevc", "mpeg4", "h264"],
 }
 h264 = {
     "name": "H.264 / Advanced Video Coding (AVC) / MPEG-4 Part 10",
     "allow_video": True,
-    "vcodecs": ["h264", "mpeg4", "h264_nvenc", "h264_amf", "hevc_amf", "hevc_nvenc", "hevc"],
+    "vcodecs": ["h264", "mpeg4", "hevc"],
 }
 aac = {
     "name": "Advanced Audio Coding",
@@ -57,7 +57,7 @@ mp4 = {
     "allow_audio": True,
     "allow_subtitle": True,
     "allow_image": True,
-    "vcodecs": ["h264", "h264_nvenc", "h264_amf", "hevc", "hevc_amf", "hevc_nvenc", "vp9", "av1", "mpeg4", "mpeg2video", "mjpeg"],
+    "vcodecs": ["h264", "hevc", "vp9", "av1", "mpeg4", "mpeg2video", "mjpeg"],
     "acodecs": ["aac", "mp3", "opus", "flac", "vorbis", "mp2"],
     "disallow_v": ["prores", "apng", "gif", "msmpeg4v3", "flv1", "vp8", "rawvideo"],
     "disallow_a": pcm_formats,
@@ -167,17 +167,17 @@ containers: Dict[str, Dict[str, Any]] = {
         "name": "Audio Video Interleave",
         "allow_video": True,
         "allow_audio": True,
-        "vcodecs": ["mpeg4", "h264", "h264_nvenc", "h264_amf", "prores", "mjpeg", "mpeg2video", "rawvideo"],
+        "vcodecs": ["mpeg4", "h264", "prores", "mjpeg", "mpeg2video", "rawvideo"],
         "acodecs": ["mp3", "aac", "vorbis", "mp2"],
-        "disallow_v": ["hevc", "hevc_nvenc", "apng", "gif"],
+        "disallow_v": ["hevc", "apng", "gif"],
     },
     "wmv": {
         "name": "Windows Media Video",
         "allow_video": True,
         "allow_audio": True,
-        "vcodecs": ["msmpeg4v3", "h264", "h264_nvenc", "h264_amf", "mpeg4", "mpeg2video", "mjpeg", "rawvideo"],
+        "vcodecs": ["msmpeg4v3", "h264", "mpeg4", "mpeg2video", "mjpeg", "rawvideo"],
         "acodecs": ["wmav2", "aac", "flac"],
-        "disallow_v": ["prores", "hevc", "hevc_amf", "hevc_nvenc", "apng", "gif"],
+        "disallow_v": ["prores", "hevc", "apng", "gif"],
     },
     "mkv": {
         "name": "Matroska",
@@ -197,8 +197,6 @@ containers: Dict[str, Dict[str, Any]] = {
             "mjpeg",
             "gif",
             "rawvideo",
-            "hevc_nvenc",
-            "hevc_amf",
         ],
         "acodecs": ["libvorbis", "vorbis", "opus", "flac", "aac", "mp2"],
         "disallow_v": ["apng"],
@@ -224,8 +222,6 @@ containers: Dict[str, Dict[str, Any]] = {
             "gif",
             "flv1",
             "rawvideo",
-            "hevc_nvenc",
-            "hevc_amf",
         ],
         "acodecs": ["aac", "mp3", "mp2", "vorbis"],
         "disallow_a": ["opus", "flac"],
