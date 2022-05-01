@@ -1,6 +1,6 @@
 import re
 
-from typing import List, Tuple, Sequence, Union, Optional
+from typing import List, Tuple, Sequence, Union, Optional, Literal
 
 from .func import clean_list
 
@@ -95,15 +95,17 @@ def speed_range_type(val: str) -> List[str]:
     return comma_type(val, 3, 3, "speed_range_type")
 
 
-def text_content(val: str) -> str:
-    return val.replace("\\n", "\n")
+AlignType = Literal["left", "center", "right"]
 
 
-def align_type(val: str) -> str:
-    allowed = ("left", "right", "center")
-    if val not in allowed:
-        raise TypeError("Align must be: " + " ".join(allowed))
-    return val
+def align_type(val: str) -> AlignType:
+    if val == "left":
+        return "left"
+    if val == "center":
+        return "center"
+    if val == "right":
+        return "right"
+    raise TypeError("Align must be 'left', 'right', or 'center'")
 
 
 def color_type(val: str) -> str:
@@ -128,6 +130,15 @@ def color_type(val: str) -> str:
         return color
 
     raise ValueError(f"Invalid Color: '{color}'")
+
+
+StreamType = Union[int, Literal["all"]]
+
+
+def stream_type(val: str) -> StreamType:
+    if val == "all":
+        return "all"
+    return int(val)
 
 
 colormap = {

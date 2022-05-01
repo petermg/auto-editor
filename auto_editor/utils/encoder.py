@@ -110,6 +110,24 @@ encoders = {
     "h264_qsv": {
         "pix_fmt": {"nv12", "p010le", "qsv",},
     },
+    "hevc_qsv": {
+        "pix_fmt": {
+            "nv12",
+            "p010le",
+            "yuyv422",
+            "y210le",
+            "qsv",
+            "bgra",
+            "x2rgb10le",
+        },
+    },
+    "h264_qsv": {
+        "pix_fmt": {
+            "nv12",
+            "p010le",
+            "qsv",
+        },
+    },
     "vp9": {
         "pix_fmt": {
             "yuv420p",

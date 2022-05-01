@@ -4,9 +4,6 @@
 import os
 import sys
 import tempfile
-import time
-import av
-timetemp = int(time.time()*1000.0)
 
 # Typing
 from typing import List
@@ -23,12 +20,6 @@ from auto_editor.edit import edit_media
 
 
 def main_options(parser):
-    from auto_editor.objects import (
-        TextObject,
-        RectangleObject,
-        EllipseObject,
-        ImageObject,
-    )
     from auto_editor.utils.types import (
         float_type,
         sample_rate_type,
@@ -43,25 +34,21 @@ def main_options(parser):
     parser.add_argument(
         "--add-text",
         nargs="*",
-        dataclass=TextObject,
         help="Add a text object to the timeline.",
     )
     parser.add_argument(
         "--add-rectangle",
         nargs="*",
-        dataclass=RectangleObject,
         help="Add a rectangle object to the timeline.",
     )
     parser.add_argument(
         "--add-ellipse",
         nargs="*",
-        dataclass=EllipseObject,
         help="Add an ellipse object to the timeline.",
     )
     parser.add_argument(
         "--add-image",
         nargs="*",
-        dataclass=ImageObject,
         help="Add an image object onto the timeline.",
     )
     parser.add_text("URL Download Options")
@@ -82,7 +69,7 @@ def main_options(parser):
         "--video-codec",
         "-vcodec",
         "-c:v",
-        default="hevc_nvenc",
+        default="auto",
         help="Set the video codec for the output media file.",
     )
     parser.add_argument(
@@ -126,6 +113,11 @@ def main_options(parser):
     parser.add_argument(
         "--extras",
         help="Add extra options for ffmpeg for video rendering. Must be in quotes.",
+    )
+    parser.add_argument(
+        "--no-seek",
+        flag=True,
+        help="Disable file seeking when rendering video. Helpful for debugging desync issues.",
     )
     parser.add_text("Miscellaneous Options")
     parser.add_argument(
@@ -209,7 +201,7 @@ def main_options(parser):
         "--no-open", flag=True, help="Do not open the file after editing is done."
     )
     parser.add_argument(
-        "--temp-dir", default="AETEMP_"+str(timetemp),
+        "--temp-dir",
         help="Set where the temporary directory is located.",
     )
     parser.add_argument(
@@ -226,10 +218,10 @@ def main_options(parser):
         "--version", flag=True, help="Display the program's version and halt."
     )
     parser.add_argument(
-        "--debug", default='true', help="Show debugging messages and values."
+        "--debug", flag=True, help="Show debugging messages and values."
     )
     parser.add_argument(
-        "--show-ffmpeg-debug", default='true', help="Show ffmpeg progress and output."
+        "--show-ffmpeg-debug", flag=True, help="Show ffmpeg progress and output."
     )
     parser.add_argument("--quiet", "-q", flag=True, help="Display less output.")
     parser.add_argument(
@@ -366,11 +358,11 @@ def main():
         print(f"Python Version: {plat.python_version()} {is64bit}")
         print(f"Platform: {plat.system()} {plat.release()} {plat.machine().lower()}")
         print(f"FFmpeg Version: {ffmpeg.version}\nFFmpeg Path: {ffmpeg.path}")
-        print(f"Auto-Editor Version: {auto_editor.version} GPU Encoding Variant")
+        print(f"Auto-Editor Version: {auto_editor.version}")
         sys.exit()
 
     if args.version:
-        print(f"Auto-Editor Version: {auto_editor.version} GPU Encoding Variant")
+        print(f"{auto_editor.version} ({auto_editor.__version__})")
         sys.exit()
 
     if args.timeline:

@@ -7,6 +7,58 @@ put here. No function should modify or create video/audio files on its own.
 """
 
 
+def parse_dataclass(unsplit_arguments, dataclass, log):
+    from dataclasses import fields
+
+    # Positional Arguments
+    #    --rectangle 0,end,10,20,20,30,#000, ...
+
+    # Keyword Arguments
+    #    --rectangle start=0,end=end,x1=10, ...
+
+    ARG_SEP = ","
+    KEYWORD_SEP = "="
+
+    d_name = dataclass.__name__
+
+    keys = [field.name for field in fields(dataclass)]
+    kwargs = {}
+    args = []
+
+    allow_positional_args = True
+
+    if unsplit_arguments == "":
+        return dataclass()
+
+    for i, arg in enumerate(unsplit_arguments.split(ARG_SEP)):
+        if i + 1 > len(keys):
+            log.error(f"{d_name} has too many arguments, starting with '{arg}'.")
+
+        if KEYWORD_SEP in arg:
+            allow_positional_args = False
+
+            parameters = arg.split(KEYWORD_SEP)
+            if len(parameters) > 2:
+                log.error(f"{d_name} invalid syntax: '{arg}'.")
+            key, val = parameters
+            if key not in keys:
+                log.error(f"{d_name} got an unexpected keyword '{key}'")
+
+            kwargs[key] = val
+        elif allow_positional_args:
+            args.append(arg)
+        else:
+            log.error(f"{d_name} positional argument follows keyword argument.")
+
+    try:
+        dataclass_instance = dataclass(*args, **kwargs)
+    except TypeError as err:
+        err_list = [d_name] + str(err).split(" ")[1:]
+        log.error(" ".join(err_list))
+
+    return dataclass_instance
+
+
 def get_stdout(cmd: List[str]) -> str:
     from subprocess import Popen, PIPE, STDOUT
 
@@ -61,22 +113,24 @@ def human_readable_time(time_in_secs: Union[int, float]) -> str:
 
 
 def open_with_system_default(path: str, log: Log) -> None:
+    import sys
     from subprocess import run
 
-    try:  # should work on Windows
-        from os import startfile  # type: ignore
+    if sys.platform == "win64" or sys.platform == "win32":
+        from os import startfile
 
-        startfile(path)
-    except OSError:
-        pass
-    except ImportError:
-        try:  # should work on MacOS and most Linux versions
+        try:
+            startfile(path)
+        except OSError:
+            log.warning("Could not find application to open file.")
+    else:
+        try:  # should work on MacOS and some Linux distros
             run(["open", path])
         except Exception:
             try:  # should work on WSL2
                 run(["cmd.exe", "/C", "start", path])
             except Exception:
-                try:  # should work on various other Linux distros
+                try:  # should work on most other Linux distros
                     run(["xdg-open", path])
                 except Exception:
                     log.warning("Could not open output file.")
