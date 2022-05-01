@@ -29,7 +29,7 @@ class FFmpeg:
     def _set_ff_path(ff_location: Optional[str], my_ffmpeg: bool) -> str:
         if ff_location is not None:
             return ff_location
-        if my_ffmpeg or system() not in ("windows", "Darwin"):
+        if my_ffmpeg or system() not in ("Windows", "Darwin"):
             return "ffmpeg"
         program = "ffmpeg" if system() == "Darwin" else "ffmpeg.exe"
         dirpath = os.path.dirname(os.path.realpath(__file__))
