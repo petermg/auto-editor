@@ -4,6 +4,8 @@
 import os
 import sys
 import tempfile
+import time
+timetemp = int(time.time()*1000.0)
 
 # Typing
 from typing import List
@@ -69,7 +71,7 @@ def main_options(parser):
         "--video-codec",
         "-vcodec",
         "-c:v",
-        default="auto",
+        default="hevc_nvenc",
         help="Set the video codec for the output media file.",
     )
     parser.add_argument(
@@ -116,7 +118,7 @@ def main_options(parser):
     )
     parser.add_argument(
         "--no-seek",
-        flag=True,
+        default='true',
         help="Disable file seeking when rendering video. Helpful for debugging desync issues.",
     )
     parser.add_text("Miscellaneous Options")
@@ -201,7 +203,7 @@ def main_options(parser):
         "--no-open", flag=True, help="Do not open the file after editing is done."
     )
     parser.add_argument(
-        "--temp-dir",
+        "--temp-dir", default="AETEMP_"+str(timetemp),
         help="Set where the temporary directory is located.",
     )
     parser.add_argument(
@@ -218,10 +220,10 @@ def main_options(parser):
         "--version", flag=True, help="Display the program's version and halt."
     )
     parser.add_argument(
-        "--debug", flag=True, help="Show debugging messages and values."
+        "--debug", default='true', help="Show debugging messages and values."
     )
     parser.add_argument(
-        "--show-ffmpeg-debug", flag=True, help="Show ffmpeg progress and output."
+        "--show-ffmpeg-debug", default='true', help="Show ffmpeg progress and output."
     )
     parser.add_argument("--quiet", "-q", flag=True, help="Display less output.")
     parser.add_argument(
@@ -358,11 +360,11 @@ def main():
         print(f"Python Version: {plat.python_version()} {is64bit}")
         print(f"Platform: {plat.system()} {plat.release()} {plat.machine().lower()}")
         print(f"FFmpeg Version: {ffmpeg.version}\nFFmpeg Path: {ffmpeg.path}")
-        print(f"Auto-Editor Version: {auto_editor.version}")
+        print(f"Auto-Editor Version: {auto_editor.version} GPU Encoding Variant")
         sys.exit()
 
     if args.version:
-        print(f"{auto_editor.version} ({auto_editor.__version__})")
+        print(f"{auto_editor.version} ({auto_editor.__version__}) GPU Encoding Variant")
         sys.exit()
 
     if args.timeline:
@@ -410,7 +412,7 @@ def main():
         temp_file = (
             "combined.mp4"
             if exporting_to_editor
-            else os.path.join(TEMP, "combined.mp4")
+            else os.path.join("combined.mp4")
         )
 
         cmd = []
@@ -421,7 +423,7 @@ def main():
                 "-filter_complex",
                 f"[0:v]concat=n={len(input_list)}:v=1:a=1",
                 "-codec:v",
-                "h264",
+                args.video_codec,
                 "-pix_fmt",
                 "yuv420p",
                 "-strict",
