@@ -1,18 +1,15 @@
-# Internal Libraries
 import os.path
 import subprocess
+from fractions import Fraction
+from typing import Tuple
 
-# Typing
-from typing import List, Tuple
-
-# Included Libraries
-from auto_editor.utils.log import Log
-from auto_editor.ffwrapper import FFmpeg, FileInfo
-from auto_editor.utils.progressbar import ProgressBar
-
-from auto_editor.utils.encoder import encoders
+from auto_editor.ffwrapper import FFmpeg
+from auto_editor.objects import EllipseObj, ImageObj, RectangleObj, TextObj
 from auto_editor.output import get_vcodec, video_quality
-from auto_editor.sheet import RectangleObj, EllipseObj, TextObj, ImageObj
+from auto_editor.timeline import Timeline
+from auto_editor.utils.encoder import encoders
+from auto_editor.utils.log import Log
+from auto_editor.utils.progressbar import ProgressBar
 
 # From: github.com/PyAV-Org/PyAV/blob/main/av/video/frame.pyx
 allowed_pix_fmt = {
@@ -92,11 +89,9 @@ def one_pos_two_pos(
 def render_av(
     ffmpeg: FFmpeg,
     track: int,
-    inp: FileInfo,
+    timeline: Timeline,
     args,
-    chunks: List[Tuple[int, int, float]],
     progress: ProgressBar,
-    effects,
     rules,
     temp: str,
     log: Log,
@@ -108,7 +103,7 @@ def render_av(
     except ImportError:
         log.import_error("av")
     try:
-        from PIL import Image, ImageDraw, ImageFont, ImageChops
+        from PIL import Image, ImageChops, ImageDraw, ImageFont
     except ImportError:
         log.import_error("Pillow")
 
@@ -143,11 +138,11 @@ def render_av(
 
         return new_objects
 
-    def render_objects(sheet, all_objects, index: int, frame, pix_fmt: str):
+    def render_objects(timeline, index: int, frame, pix_fmt: str):
         img = frame.to_image().convert("RGBA")
 
-        for item in sheet[index]:
-            obj = all_objects[item]
+        # TODO: Fix me
+        for obj in timeline.vclips[track]:
 
             obj_img = Image.new("RGBA", img.size, (255, 255, 255, 0))
             draw = ImageDraw.Draw(obj_img)
@@ -190,16 +185,20 @@ def render_av(
 
         return frame.from_image(img).reformat(format=pix_fmt)
 
+    chunks = timeline.chunks
+
+    if chunks is None:
+        log.error("Timeline too complex")
+
+    inp = timeline.inp
+
     if chunks[-1][2] == 99999:
         chunks.pop()
 
-    total_frames = chunks[-1][1]
-    progress.start(total_frames, "Creating new video")
+    progress.start(chunks[-1][1], "Creating new video")
 
-    fps = inp.videos[track].fps
-
-    container = av.open(inp.path, "r")
-    pix_fmt = container.streams.video[track].pix_fmt
+    cn = av.open(inp.path, "r")
+    pix_fmt = cn.streams.video[track].pix_fmt
 
     target_pix_fmt = pix_fmt
 
@@ -218,13 +217,11 @@ def render_av(
 
     log.debug(f"apply video quality settings now: {not apply_video_later}")
 
-    video_stream = container.streams.video[track]
-    video_stream.thread_type = "AUTO"
+    stream = cn.streams.video[track]
+    stream.thread_type = "AUTO"
 
-    width = video_stream.width
-    height = video_stream.height
-
-    effects.all = set_static_assets(effects.all, log)
+    width = stream.width
+    height = stream.height
 
     spedup = os.path.join(temp, f"spedup{track}.mp4")
 
@@ -240,7 +237,7 @@ def render_av(
         "-s",
         f"{width}*{height}",
         "-framerate",
-        f"{fps}",
+        f"{timeline.fps}",
         "-i",
         "-",
         "-pix_fmt",
@@ -259,11 +256,11 @@ def render_av(
     )
     assert process2.stdin is not None
 
-    input_equavalent = 0.0
+    input_equavalent = Fraction(0, 1)
     output_equavalent = 0
     chunk = chunks.pop(0)
 
-    tou = int(video_stream.time_base.denominator / fps)
+    tou = int(stream.time_base.denominator / stream.average_rate)
     log.debug(f"Tou: {tou}")
 
     seek = 10
@@ -274,13 +271,17 @@ def render_av(
     if args.no_seek:
         SEEK_COST = 4294967295
     else:
-        SEEK_COST = int(fps * 5)
+        SEEK_COST = int(stream.average_rate * 5)
     SEEK_RETRY = SEEK_COST // 2
 
+    # Converting between two different framerates is a lot like applying a speed.
+    fps_convert = Fraction(stream.average_rate, Fraction(timeline.fps))
+
     try:
-        for frame in container.decode(video_stream):
-            # frame.time == frame.pts * video_stream.time_base
-            index = round(frame.time * fps)
+        for frame in cn.decode(stream):
+            # frame.time == frame.pts * stream.time_base
+            index = round(frame.time * timeline.fps)
+            index2 = round(frame.time * stream.average_rate)
 
             if frame.key_frame:
                 log.debug(f"Keyframe {index} {frame.pts}")
@@ -297,20 +298,20 @@ def render_av(
                     break
 
             if chunk[2] == 99999:
-                if chunk[1] - index > SEEK_COST and index > seek:
-                    seek = index + SEEK_RETRY
+                if chunk[1] - index2 > SEEK_COST and index2 > seek:
+                    seek = index2 + SEEK_RETRY
 
                     seek_frame = index
-                    container.seek(chunk[1] * tou, stream=video_stream)
+                    cn.seek(chunk[1] * tou, stream=stream)
             else:
-                input_equavalent += 1 / chunk[2]
+                input_equavalent += Fraction(1, Fraction(chunk[2]) * fps_convert)
 
             while input_equavalent > output_equavalent:
-                if index in effects.sheet:
-                    frame = render_objects(
-                        effects.sheet, effects.all, index, frame, target_pix_fmt
-                    )
-                elif pix_fmt != target_pix_fmt:
+                # if index in effects.sheet:
+                #     frame = render_objects(
+                #         effects.sheet, effects.all, index, frame, target_pix_fmt
+                #     )
+                if pix_fmt != target_pix_fmt:
                     frame = frame.reformat(format=target_pix_fmt)
 
                 in_bytes = frame.to_ndarray().tobytes()

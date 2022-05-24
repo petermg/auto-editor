@@ -31,7 +31,7 @@ class Log:
         self.quiet = quiet
         self.temp = temp
 
-    def debug(self, message: str) -> None:
+    def debug(self, message: object) -> None:
         if self.is_debug:
             self.conwrite("")
             sys.stderr.write(f"Debug: {message}\n")
@@ -42,6 +42,8 @@ class Log:
         try:
             rmtree(self.temp)
             self.debug("Removed Temp Directory.")
+        except FileNotFoundError:
+            pass
         except PermissionError:
             sleep(0.1)
             try:
@@ -49,20 +51,16 @@ class Log:
                 self.debug("Removed Temp Directory.")
             except Exception:
                 self.debug("Failed to delete temp dir.")
-        except FileNotFoundError:
-            # that's ok, the folder we are trying to remove is already gone
-            pass
 
     def conwrite(self, message: str) -> None:
         if not self.quiet:
-            buffer = get_terminal_size().columns - len(message) - 3
-            sys.stdout.write("  " + message + " " * buffer + "\r")
+            buffer = " " * (get_terminal_size().columns - len(message) - 3)
+            sys.stdout.write(f"  {message}{buffer}\r")
 
     def error(self, message: str) -> NoReturn:
         self.conwrite("")
         sys.stderr.write(f"Error! {message}\n")
         self.cleanup()
-
         from platform import system
 
         if system() == "Linux":

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from subprocess import Popen, PIPE
 
 # Typing
-from typing import List, Optional
+from typing import List, Tuple, Optional
 
 # Included Libraries
 from auto_editor.utils.func import get_stdout
@@ -122,7 +122,6 @@ class FFmpeg:
                 log.error(check.group())
 
         if path is not None and not os.path.isfile(path):
-            print(output)
             log.error(f"The file {path} was not created.")
         elif show_out and not self.debug:
             print(f"stderr: {output}")
@@ -166,6 +165,20 @@ class SubtitleStream:
     lang: Optional[str]
 
 
+def to_fdur(dur: Optional[str]) -> float:
+    if dur is None:
+        return 0
+    nums = dur.split(":")
+    while len(nums) < 3:
+        nums.insert(0, "0")
+
+    hours, minutes, seconds = nums
+    try:
+        return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    except ValueError:
+        return 0
+
+
 class FileInfo:
     __slots__ = (
         "path",
@@ -175,16 +188,30 @@ class FileInfo:
         "name",
         "ext",
         "duration",
+        "fdur",
         "bitrate",
         "metadata",
         "videos",
         "audios",
         "subtitles",
-        "gfps",
-        "gwidth",
-        "gheight",
-        "gsamplerate",
     )
+
+    def get_res(self) -> Tuple[int, int]:
+        if len(self.videos) > 0:
+            return self.videos[0].width, self.videos[0].height
+        return 1920, 1080
+
+    def get_fps(self) -> float:
+        fps = None
+        if len(self.videos) > 0:
+            fps = self.videos[0].fps
+
+        return 30 if fps is None else fps
+
+    def get_samplerate(self) -> int:
+        if len(self.audios) > 0:
+            return self.audios[0].samplerate
+        return 48000
 
     def __init__(self, path: str, ffmpeg: FFmpeg, log: Log):
         self.path = path
@@ -196,6 +223,7 @@ class FileInfo:
         info = get_stdout([ffmpeg.path, "-hide_banner", "-i", path])
 
         self.duration = regex_match(r"Duration:\s(?P<match>[0-9:.]+),", info)
+        self.fdur = to_fdur(self.duration)
         self.bitrate = regex_match(r"bitrate:\s(?P<match>[0-9]+\skb\/s)", info)
 
         self.metadata = {}
@@ -213,7 +241,7 @@ class FileInfo:
                 if body is not None:
                     if key is None:
                         if active_key is not None:
-                            self.metadata[active_key] += "\n" + body
+                            self.metadata[active_key] += f"\n{body}"
                     else:
                         self.metadata[key] = body
                         active_key = key
@@ -294,15 +322,3 @@ class FileInfo:
                     self.subtitles.append(
                         SubtitleStream(codec, ext, regex_match(lang_regex, line))
                     )
-
-        self.gfps: float = 30.0 if fps is None else fps
-
-        if len(self.videos) > 0:
-            self.gwidth, self.gheight = self.videos[0].width, self.videos[0].height
-        else:
-            self.gwidth, self.gheight = 1280, 720
-
-        if len(self.audios) > 0:
-            self.gsamplerate = self.audios[0].samplerate
-        else:
-            self.gsamplerate = 48000

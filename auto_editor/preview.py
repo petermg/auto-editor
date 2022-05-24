@@ -1,70 +1,85 @@
-# Internal Libraries
-from datetime import timedelta
+from statistics import fmean, median
+from typing import List, Tuple
 
-# Typing
-from typing import List, Tuple, Union
-
-# Included Libraries
-from auto_editor.utils.func import get_new_length
+from auto_editor.timeline import Timeline
+from auto_editor.utils.func import to_timecode
 from auto_editor.utils.log import Log
-from auto_editor.ffwrapper import FileInfo
 
 
-def display_length(secs: Union[int, float]) -> str:
-    if secs < 0:
-        return "-" + str(timedelta(seconds=round(abs(secs))))
-    return str(timedelta(seconds=round(secs)))
+def display(secs: float) -> str:
+    return to_timecode(round(secs), "rass")
 
 
-def time_frame(title: str, frames: Union[int, float], fps: float) -> None:
-    in_sec = round(frames / fps, 1)
-    minutes = timedelta(seconds=round(in_sec))
-    print(f"{title}: {in_sec} secs ({minutes})")
+def time_frame(title: str, frames: float, fps: float) -> None:
+    tc = to_timecode(frames / fps, "ass")
+    preci = 0 if int(frames) == frames else 2
+    print(f" - {f'{title}:':<10} {tc:<12} ({frames:.{preci}f})")
 
 
-def preview(inp: FileInfo, chunks: List[Tuple[int, int, float]], log: Log) -> None:
+def preview(timeline: Timeline, log: Log) -> None:
     log.conwrite("")
 
-    old_length = chunks[-1][1] / inp.gfps
-    new_length = get_new_length(chunks, inp.gfps)
+    fps = timeline.fps
+    in_len = sum([inp.fdur for inp in timeline.inputs])
 
-    diff = new_length - old_length
+    out_len: float = 0
+    for vclips in timeline.vclips:
+        dur: float = 0
+        for vclip in vclips:
+            dur += vclip.dur / vclip.speed
+        out_len = max(out_len, dur / fps)
+    for aclips in timeline.aclips:
+        dur = 0
+        for aclip in aclips:
+            dur += aclip.dur / aclip.speed
+        out_len = max(out_len, dur / fps)
+
+    diff = out_len - in_len
 
     print(
-        f"\nlength:\n - change: ({display_length(old_length)}) 100% -> "
-        f"({display_length(new_length)}) {round((new_length / old_length) * 100, 2)}%\n "
-        f"- diff: ({display_length(diff)}) {round((diff / old_length) * 100, 2)}%"
+        f"\nlength:\n - change: ({display(in_len)}) 100% -> "
+        f"({display(out_len)}) {round((out_len / in_len) * 100, 2)}%\n "
+        f"- diff: ({display(diff)}) {round((diff / in_len) * 100, 2)}%"
     )
 
-    clips = 0
-    cuts = 0
+    clip_lens = [clip.dur / clip.speed for clip in timeline.aclips[0]]
+
+    # Calculate cuts
+    oe: List[Tuple[int, int]] = []
+
+    # TODO: Make offset_end_pairs work on overlapping clips.
+    for clip in timeline.aclips[0]:
+        oe.append((clip.offset, clip.offset + clip.dur))
+
     cut_lens = []
-    clip_lens = []
-    for chunk in chunks:
-        if chunk[2] != 99999:
-            clips += 1
-            leng = (chunk[1] - chunk[0]) / chunk[2]
-            clip_lens.append(leng)
-        else:
-            cuts += 1
-            leng = chunk[1] - chunk[0]
-            cut_lens.append(leng)
+    i = 0
+    while i < len(oe) - 1:
+        if i == 0 and oe[i][0] != 0:
+            cut_lens.append(oe[i][1])
 
-    print(f"clips: {clips}")
-    if len(clip_lens) < 2:
-        time_frame(" - clip length", sum(clip_lens), inp.gfps)
-    else:
-        time_frame(" - smallest", min(clip_lens), inp.gfps)
-        time_frame(" - largest", max(clip_lens), inp.gfps)
-        time_frame(" - average", sum(clip_lens) / len(clip_lens), inp.gfps)
+        cut_lens.append(oe[i + 1][0] - oe[i][1])
+        i += 1
 
-    print(f"cuts: {cuts}")
-    if len(cut_lens) < 2:
-        time_frame(" - cut length", sum(cut_lens), inp.gfps)
-    else:
-        time_frame(" - smallest", min(cut_lens), inp.gfps)
-        time_frame(" - largest", max(cut_lens), inp.gfps)
-        time_frame(" - average", sum(cut_lens) / len(cut_lens), inp.gfps)
+    if len(oe) > 0 and oe[-1][1] < round(in_len * fps):
+        cut_lens.append(round(in_len * fps) - oe[-1][1])
+
+    print(f"clips: {len(clip_lens)}")
+    log.debug(clip_lens)
+    if len(clip_lens) == 0:
+        clip_lens = [0]
+    time_frame("smallest", min(clip_lens), fps)
+    time_frame("largest", max(clip_lens), fps)
+    if len(clip_lens) > 1:
+        time_frame("median", median(clip_lens), fps)
+        time_frame("average", fmean(clip_lens), fps)
+
+    print(f"cuts: {len(cut_lens)}")
+    log.debug(cut_lens)
+    if len(cut_lens) == 0:
+        cut_lens = [0]
+    time_frame("smallest", min(cut_lens), fps)
+    time_frame("largest", max(cut_lens), fps)
+    if len(cut_lens) > 1:
+        time_frame("median", median(cut_lens), fps)
+        time_frame("average", fmean(cut_lens), fps)
     print("")
-
-    log.debug(f"Chunks: {chunks}")

@@ -1,18 +1,13 @@
-# Internal Libraries
 import os.path
+from typing import List, Tuple
 
-# Typing
-from typing import List, Tuple, Optional
-
-# Included Libraries
-from auto_editor.utils.log import Log
-from auto_editor.utils.func import fnone
-from auto_editor.utils.container import Container
 from auto_editor.ffwrapper import FFmpeg, FileInfo
+from auto_editor.utils.container import Container
+from auto_editor.utils.log import Log
 
 
 def fset(cmd: List[str], option: str, value: str) -> List[str]:
-    if fnone(value):
+    if value is None or value == "unset":
         return cmd
     return cmd + [option] + [value]
 
@@ -58,7 +53,7 @@ def video_quality(cmd: List[str], args, inp: FileInfo, rules: Container) -> List
 
     qscale = args.video_quality_scale
 
-    if args.video_codec == "uncompressed" and fnone(qscale):
+    if args.video_codec == "uncompressed" and (qscale is None or qscale == "unset"):
         qscale = "1"
 
     vcodec = get_vcodec(args.video_codec, inp, rules)
@@ -175,12 +170,6 @@ def mux_quality_media(
 
         cmd = fset(cmd, "-c:a", acodec)
         cmd = fset(cmd, "-b:a", args.audio_bitrate)
-
-        if fnone(args.sample_rate):
-            if rules.samplerate is not None:
-                cmd.extend(["-ar", str(rules.samplerate[0])])
-        else:
-            cmd.extend(["-ar", str(args.sample_rate)])
 
     if args.extras is not None:
         cmd.extend(args.extras.split(" "))

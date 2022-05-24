@@ -1,14 +1,12 @@
 import os.path
 from os.path import abspath
+from platform import system
 from shutil import move
 from urllib.parse import quote
-from platform import system
 
-from typing import List, Tuple
+from auto_editor.timeline import Timeline
 
 from .utils import indent, safe_mkdir
-
-from auto_editor.ffwrapper import FileInfo
 
 """
 Premiere Pro uses the Final Cut Pro 7 XML Interchange Format
@@ -29,7 +27,7 @@ DEPTH = "16"
 def fix_url(path: str) -> str:
     if system() == "Windows":
         return "file://localhost/" + quote(abspath(path)).replace("%5C", "/")
-    return "file://localhost" + abspath(path)
+    return f"file://localhost{abspath(path)}"
 
 
 def speedup(speed: float) -> str:
@@ -72,16 +70,23 @@ def speedup(speed: float) -> str:
 
 
 def premiere_xml(
-    inp: FileInfo,
     temp: str,
     output: str,
-    chunks: List[Tuple[int, int, float]],
+    timeline: Timeline,
 ) -> None:
+
+    inp = timeline.inp
+    chunks = timeline.chunks
+
+    if chunks is None:
+        raise ValueError("Timeline too complex")
+
+    fps = timeline.fps
+    samplerate = timeline.samplerate
 
     audio_file = len(inp.videos) == 0 and len(inp.audios) == 1
 
     # This is not at all how timebase works in actual media but that's how it works here.
-    fps = inp.gfps
     timebase = int(fps)
 
     if fps == 23.98 or fps == 23.97602397 or fps == 23.976:
@@ -114,10 +119,10 @@ def premiere_xml(
 
         for i in range(1, tracks):
             newtrack = os.path.join(fold, f"{i}.wav")
-            move(os.path.join(temp, f"{i}.wav"), newtrack)
+            move(os.path.join(temp, f"0-{i}.wav"), newtrack)
             pathurls.append(fix_url(newtrack))
 
-    width, height = inp.gwidth, inp.gheight
+    width, height = timeline.res
 
     group_name = f"Auto-Editor {'Audio' if audio_file else 'Video'} Group"
 
@@ -236,7 +241,7 @@ def premiere_xml(
                             "\t\t<audio>",
                             "\t\t\t<samplecharacteristics>",
                             f"\t\t\t\t<depth>{DEPTH}</depth>",
-                            f"\t\t\t\t<samplerate>{inp.gsamplerate}</samplerate>",
+                            f"\t\t\t\t<samplerate>{samplerate}</samplerate>",
                             "\t\t\t</samplecharacteristics>",
                             "\t\t\t<channelcount>2</channelcount>",
                             "\t\t</audio>",
@@ -281,7 +286,7 @@ def premiere_xml(
                 "\t<format>",
                 "\t\t<samplecharacteristics>",
                 f"\t\t\t<depth>{DEPTH}</depth>",
-                f"\t\t\t<samplerate>{inp.gsamplerate}</samplerate>",
+                f"\t\t\t<samplerate>{samplerate}</samplerate>",
                 "\t\t</samplecharacteristics>",
                 "\t</format>",
             )
@@ -338,7 +343,7 @@ def premiere_xml(
                             "\t\t<audio>",
                             "\t\t\t<samplecharacteristics>",
                             f"\t\t\t\t<depth>{DEPTH}</depth>",
-                            f"\t\t\t\t<samplerate>{inp.gsamplerate}</samplerate>",
+                            f"\t\t\t\t<samplerate>{samplerate}</samplerate>",
                             "\t\t\t</samplecharacteristics>",
                             "\t\t\t<channelcount>2</channelcount>",
                             "\t\t</audio>",

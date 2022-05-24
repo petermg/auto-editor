@@ -1,23 +1,35 @@
 import os
 import re
-
+from dataclasses import dataclass
 from typing import List, Tuple
+
+from auto_editor.ffwrapper import FFmpeg
+from auto_editor.timeline import Timeline
+from auto_editor.utils.func import to_timecode
 from auto_editor.utils.log import Log
-from auto_editor.ffwrapper import FileInfo
+
+
+@dataclass
+class SerialSub:
+    start: int
+    end: int
+    before: str
+    middle: str
+    after: str
 
 
 class SubtitleParser:
-    def __init__(self):
+    def __init__(self) -> None:
         self.supported_codecs = ("ass", "webvtt", "mov_text")
 
-    def parse(self, text, fps: float, codec: str):
+    def parse(self, text, fps: float, codec: str) -> None:
 
         if codec not in self.supported_codecs:
             raise ValueError(f"codec {codec} not supported.")
 
         self.fps = fps
         self.codec = codec
-        self.contents = []
+        self.contents: List[SerialSub] = []
 
         if codec == "ass":
             time_code = re.compile(r"(.*)(\d+:\d+:[\d.]+)(.*)(\d+:\d+:[\d.]+)(.*)")
@@ -33,13 +45,13 @@ class SubtitleParser:
                 self.header = text[: reg.span()[0]]
 
             self.contents.append(
-                [
+                SerialSub(
                     self.to_frame(reg.group(2)),
                     self.to_frame(reg.group(4)),
                     reg.group(1),
                     reg.group(3),
-                    reg.group(5) + "\n",
-                ]
+                    f"{reg.group(5)}\n",
+                )
             )
 
         if i == 0:
@@ -55,41 +67,37 @@ class SubtitleParser:
 
             new_content = []
             for content in self.contents:
-                if cut[0] <= content[1] and cut[1] > content[0]:
+                if cut[0] <= content.end and cut[1] > content.start:
 
                     diff = int(
-                        (min(cut[1], content[1]) - max(cut[0], content[0]))
+                        (min(cut[1], content.end) - max(cut[0], content.start))
                         * speed_factor
                     )
-                    if content[0] > cut[0]:
-                        content[0] -= diff
-                        content[1] -= diff
+                    if content.start > cut[0]:
+                        content.start -= diff
+                        content.end -= diff
 
-                    content[1] -= diff
+                    content.end -= diff
 
-                elif content[0] >= cut[0]:
+                elif content.start >= cut[0]:
                     diff = int((cut[1] - cut[0]) * speed_factor)
 
-                    content[0] -= diff
-                    content[1] -= diff
+                    content.start -= diff
+                    content.end -= diff
 
-                if content[0] != content[1]:
+                if content.start != content.end:
                     new_content.append(content)
 
         self.contents = new_content
 
-    def write(self, file_path: str):
+    def write(self, file_path: str) -> None:
         with open(file_path, "w") as file:
             file.write(self.header)
-            for item in self.contents:
+            for c in self.contents:
                 file.write(
-                    "{before}{start_time}{middle}{end_time}{after}".format(
-                        before=item[2],
-                        start_time=self.to_timecode(item[0]),
-                        middle=item[3],
-                        end_time=self.to_timecode(item[1]),
-                        after=item[4],
-                    )
+                    f"{c.before}{to_timecode(c.start / self.fps, self.codec)}"
+                    f"{c.middle}{to_timecode(c.end / self.fps, self.codec)}"
+                    f"{c.after}"
                 )
             file.write(self.footer)
 
@@ -108,37 +116,19 @@ class SubtitleParser:
             (int(hours) * 3600 + int(minutes) * 60 + float(seconds)) * self.fps
         )
 
-    def to_timecode(self, frame: int) -> str:
-        seconds = frame / self.fps
-
-        m, s = divmod(seconds, 60)
-        h, m = divmod(m, 60)
-
-        sig_fig = 2 if self.codec == "ass" else 3
-
-        str_s = str(round(s, sig_fig)).zfill(2)
-        del s
-
-        if self.codec == "webvtt":
-            if int(h) == 0:
-                return f"{int(m):02d}:{str_s}"
-            time_format = "{:02d}:{:02d}:{}"
-        elif self.codec == "mov_text":
-            str_s = str_s.replace(".", ",", 1)
-            time_format = "{:02d}:{:02d}:{}"
-        else:
-            time_format = "{:d}:{:02d}:{}"
-
-        return time_format.format(int(h), int(m), str_s)
-
 
 def cut_subtitles(
-    ffmpeg,
-    inp: FileInfo,
-    chunks: List[Tuple[int, int, float]],
+    ffmpeg: FFmpeg,
+    timeline: Timeline,
     temp: str,
     log: Log,
 ) -> None:
+    inp = timeline.inp
+    chunks = timeline.chunks
+
+    if chunks is None:
+        log.error("Timeline too complex")
+
     for s, sub in enumerate(inp.subtitles):
         file_path = os.path.join(temp, f"{s}s.{sub.ext}")
         new_path = os.path.join(temp, f"new{s}s.{sub.ext}")
@@ -147,12 +137,12 @@ def cut_subtitles(
 
         if sub.codec in parser.supported_codecs:
             with open(file_path) as file:
-                parser.parse(file.read(), inp.gfps, sub.codec)
+                parser.parse(file.read(), timeline.fps, sub.codec)
         else:
             convert_path = os.path.join(temp, f"{s}s_convert.vtt")
             ffmpeg.run(["-i", file_path, convert_path])
             with open(convert_path) as file:
-                parser.parse(file.read(), inp.gfps, "webvtt")
+                parser.parse(file.read(), timeline.fps, "webvtt")
 
         parser.edit(chunks)
         parser.write(new_path)

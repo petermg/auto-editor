@@ -1,23 +1,20 @@
-# Internal Libraries
-import os
-import sys
-import shutil
-import logging
-import platform
-import subprocess
-from time import perf_counter
+# type: ignore
 
-# External Libraries
+import logging
+import os
+import platform
+import shutil
+import subprocess
+import sys
+from time import perf_counter
+from typing import Callable, List, NoReturn, Optional, Tuple
+
 import av
 import numpy as np
 
-av.logging.set_level(av.logging.PANIC)
-
-# Typing
-from typing import List, Tuple, Callable, NoReturn, Optional
-
-# Included Libraries
 from auto_editor.vanparse import ArgumentParser
+
+av.logging.set_level(av.logging.PANIC)
 
 
 def test_options(parser):
@@ -93,21 +90,13 @@ def check_for_error(cmd: List[str], match=None) -> None:
 
 
 def make_np_list(in_file: str, compare_file: str, the_speed: float) -> None:
+    from auto_editor.render.tsm.phasevocoder import phasevocoder
     from auto_editor.wavfile import read
-    from auto_editor.render.tsm import phasevocoder, ArrReader, ArrWriter
 
     _, sped_chunk = read(in_file)
     channels = 2
 
-    reader = ArrReader(sped_chunk)
-    writer = ArrWriter(np.zeros((0, 2), dtype=np.int16))
-
-    phasevocoder(channels, speed=the_speed).run(reader, writer)
-
-    spedup_audio = writer.output
-    del writer
-    del reader
-
+    spedup_audio = phasevocoder(channels, the_speed, sped_chunk)
     loaded = np.load(compare_file)
 
     if not np.array_equal(spedup_audio, loaded["a"]):
@@ -138,7 +127,7 @@ class Tester:
         self.failed_tests = 0
         self.args = args
 
-    def run_test(self, func: Callable, cleanup=None, allow_fail=False) -> None:
+    def run(self, func: Callable, cleanup=None, allow_fail=False) -> None:
         if self.args.only != [] and func.__name__ not in self.args.only:
             return
 
@@ -211,43 +200,11 @@ def main(sys_args: Optional[List[str]] = None):
     def parser_test():
         check_for_error(["example.mp4", "--video-speed"], "needs argument")
 
-    def subtitle_tests():
-        from auto_editor.render.subtitle import SubtitleParser
-
-        test = SubtitleParser()
-        test.contents = [
-            [0, 10, "A"],
-            [10, 20, "B"],
-            [20, 30, "C"],
-            [30, 40, "D"],
-            [40, 50, "E"],
-            [50, 60, "F"],
-        ]
-        chunks = [
-            (0, 10, 1),
-            (10, 20, 99999),
-            (20, 30, 1),
-            (30, 40, 99999),
-            (40, 50, 1),
-            (50, 60, 99999),
-        ]
-        test.edit(chunks)
-
-        if test.contents != [[0, 10, "A"], [10, 20, "C"], [20, 30, "E"]]:
-            raise ValueError("Incorrect subtitle results.")
-
     def tsm_1a5_test():
         make_np_list(
             "resources/wav/example-cut-s16le.wav",
             "resources/data/example_1.5_speed.npz",
             1.5,
-        )
-
-    def tsm_0a5_test():
-        make_np_list(
-            "resources/wav/example-cut-s16le.wav",
-            "resources/data/example_0.5_speed.npz",
-            0.5,
         )
 
     def tsm_2a0_test():
@@ -285,6 +242,7 @@ def main(sys_args: Optional[List[str]] = None):
             assert video.width == 1280
             assert video.height == 720
             assert video.codec.name == "mpeg4"
+            assert float(video.duration * video.time_base) == 17.633333333333333
             assert cn.streams.audio[0].codec.name == "aac"
             assert cn.streams.audio[0].rate == 48000
 
@@ -295,6 +253,7 @@ def main(sys_args: Optional[List[str]] = None):
             assert video.width == 1280
             assert video.height == 720
             assert video.codec.name == "h264"
+            assert float(video.duration * video.time_base) == 17.633333333333333
             assert cn.streams.audio[0].codec.name == "aac"
             assert cn.streams.audio[0].rate == 48000
             assert video.language == "eng"
@@ -462,7 +421,7 @@ def main(sys_args: Optional[List[str]] = None):
             "wav/pcm-f32le.wav",
             "wav/pcm-s32le.wav",
             "multi-track.mov",
-            "subtitle.mp4",
+            # "subtitle.mp4",
             "testsrc.mkv",
         ):
 
@@ -472,7 +431,7 @@ def main(sys_args: Optional[List[str]] = None):
             run_program([test_file, "-exp"])
             run_program([test_file, "-exf"])
             run_program([test_file, "-exs"])
-            run_program([test_file, "--export_as_clip_sequence"])
+            # run_program([test_file, "--export_as_clip_sequence"])
             run_program([test_file, "--preview"])
             cleanup("resources")
 
@@ -480,10 +439,32 @@ def main(sys_args: Optional[List[str]] = None):
         run_program(["example.mp4", "--video_codec", "h264"])
         run_program(["example.mp4", "--audio_codec", "ac3"])
 
-    def combine_tests():
+    def combine():
         run_program(["example.mp4", "--mark_as_silent", "0,171", "-o", "hmm.mp4"])
-        run_program(["example.mp4", "hmm.mp4", "--combine_files", "--debug"])
+        run_program(["example.mp4", "hmm.mp4", "--combine-files", "--debug"])
         os.remove("hmm.mp4")
+
+    def frame_rate():
+        run_program(["example.mp4", "-r", "15", "--no-seek"])
+        with av.open("example_ALTERED.mp4", "r") as cn:
+            video = cn.streams.video[0]
+            assert video.average_rate == 15
+            dur = float(video.duration * video.time_base)
+            assert dur - 17.633333333333333 < 3
+
+        run_program(["example.mp4", "-r", "20"])
+        with av.open("example_ALTERED.mp4", "r") as cn:
+            video = cn.streams.video[0]
+            assert video.average_rate == 20
+            dur = float(video.duration * video.time_base)
+            assert dur - 17.633333333333333 < 2
+
+        run_program(["example.mp4", "-r", "60"])
+        with av.open("example_ALTERED.mp4", "r") as cn:
+            video = cn.streams.video[0]
+            assert video.average_rate == 60
+            dur = float(video.duration * video.time_base)
+            assert dur - 17.633333333333333 < 0.3
 
     def image_test():
         run_program(["resources/embedded-image/h264-png.mp4"])
@@ -577,56 +558,57 @@ def main(sys_args: Optional[List[str]] = None):
             "Logic operator must be between two editing methods",
         )
 
-    ### Runners ###
+    tests = []
+
+    if args.category in ("unit", "all"):
+        tests.extend([tsm_1a5_test, tsm_2a0_test])
+
+    if args.category in ("api", "all"):
+        tests.append(read_api_0_1)
+
+    if args.category in ("sub", "all"):
+        tests.extend([info, levels, subdump, grep, desc])
+
+    if args.category in ("cli", "all"):
+        tests.extend(
+            [
+                various_errors_test,
+                frame_rate,
+                help_tests,
+                version_test,
+                parser_test,
+                example_tests,
+                high_speed_test,
+                url_test,
+                unit_tests,
+                backwards_range_test,
+                cut_out_test,
+                image_test,
+                gif_test,
+                margin_tests,
+                input_extension,
+                output_extension,
+                progress_ops_test,
+                silent_threshold,
+                track_tests,
+                json_tests,
+                scale_tests,
+                export_tests,
+                codec_tests,
+                motion_tests,
+                edit_positive_tests,
+                edit_negative_tests,
+            ]
+        )
+
+        # tester.run(effect_tests, cleanup=clean_all)
+        # tester.run(render_text)
+        # tester.run(check_font_error)
 
     tester = Tester(args)
 
-    if args.category in ("unit", "all"):
-        tester.run_test(subtitle_tests)
-        tester.run_test(tsm_1a5_test)
-        tester.run_test(tsm_0a5_test, allow_fail=True)
-        tester.run_test(tsm_2a0_test)
-
-    if args.category in ("api", "all"):
-        tester.run_test(read_api_0_1)
-
-    if args.category in ("sub", "all"):
-        tester.run_test(info)
-        tester.run_test(levels)
-        tester.run_test(subdump)
-        tester.run_test(grep)
-        tester.run_test(desc)
-
-    if args.category in ("cli", "all"):
-        tester.run_test(help_tests)
-        tester.run_test(version_test)
-        tester.run_test(parser_test)
-        tester.run_test(example_tests)
-        tester.run_test(high_speed_test)
-        tester.run_test(url_test)
-        tester.run_test(unit_tests)
-        tester.run_test(backwards_range_test)
-        tester.run_test(cut_out_test)
-        tester.run_test(image_test)
-        tester.run_test(gif_test, cleanup=clean_all)
-        tester.run_test(margin_tests)
-        tester.run_test(input_extension)
-        tester.run_test(output_extension)
-        tester.run_test(progress_ops_test)
-        tester.run_test(silent_threshold)
-        tester.run_test(track_tests)
-        tester.run_test(json_tests)
-        tester.run_test(scale_tests)
-        tester.run_test(various_errors_test)
-        tester.run_test(effect_tests, cleanup=clean_all)
-        tester.run_test(render_text)
-        tester.run_test(check_font_error)
-        tester.run_test(export_tests)
-        tester.run_test(codec_tests)
-        tester.run_test(combine_tests)
-        tester.run_test(motion_tests)
-        tester.run_test(edit_positive_tests)
-        tester.run_test(edit_negative_tests)
+    for test in tests:
+        tester.run(test)
 
     tester.end()
 
